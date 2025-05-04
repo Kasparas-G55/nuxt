@@ -5,7 +5,7 @@ import { createError } from 'h3'
 import { defineNuxtPlugin, useRuntimeConfig } from '../nuxt'
 import { getRouteRules } from '../composables/manifest'
 import { clearError, showError } from '../composables/error'
-import { navigateTo } from '../composables/router'
+import { navigateTo, orderMiddlewares } from '../composables/router'
 
 // @ts-expect-error virtual file
 import { globalMiddleware } from '#build/middleware'
@@ -65,8 +65,10 @@ function getRouteFromPath (fullPath: string | Partial<Route>) {
 
 type RouteGuardReturn = void | Error | string | boolean
 
-interface RouteGuard {
+export interface RouteGuard {
   (to: Route, from: Route): RouteGuardReturn | Promise<RouteGuardReturn>
+  enforce?: 'pre' | 'post' | 'default'
+  order?: number
 }
 
 interface RouterHooks {
@@ -247,7 +249,7 @@ export default defineNuxtPlugin<{ route: Route, router: Router }>({
         nuxtApp._processingMiddleware = true
 
         if (import.meta.client || !nuxtApp.ssrContext?.islandContext) {
-          const middlewareEntries = new Set<RouteGuard>([...globalMiddleware, ...nuxtApp._middleware.global])
+          const middlewareEntries = new Set<RouteGuard>(orderMiddlewares([...globalMiddleware, ...nuxtApp._middleware.global]))
 
           if (isAppManifestEnabled) {
             const routeRules = await nuxtApp.runWithContext(() => getRouteRules({ path: to.path }))

@@ -12,7 +12,7 @@ import { toArray } from '../utils'
 import { getRouteRules } from '#app/composables/manifest'
 import { defineNuxtPlugin, useRuntimeConfig } from '#app/nuxt'
 import { clearError, createError, isNuxtError, showError, useError } from '#app/composables/error'
-import { navigateTo } from '#app/composables/router'
+import { navigateTo, orderMiddlewares } from '#app/composables/router'
 
 // @ts-expect-error virtual file
 import { appManifest as isAppManifestEnabled } from '#build/nuxt.config.mjs'
@@ -20,6 +20,7 @@ import _routes, { handleHotUpdate } from '#build/routes'
 import routerOptions, { hashMode } from '#build/router.options'
 // @ts-expect-error virtual file
 import { globalMiddleware, namedMiddleware } from '#build/middleware'
+import type { RouteGuard } from '#app/plugins/router'
 
 // https://github.com/vuejs/router/blob/4a0cc8b9c1e642cdf47cc007fa5bbebde70afc66/packages/router/src/history/html5.ts#L37
 function createCurrentLocation (
@@ -188,8 +189,8 @@ const plugin: Plugin<{ router: Router }> = defineNuxtPlugin({
       nuxtApp._processingMiddleware = true
 
       if (import.meta.client || !nuxtApp.ssrContext?.islandContext) {
-        type MiddlewareDef = string | RouteMiddleware
-        const middlewareEntries = new Set<MiddlewareDef>([...globalMiddleware, ...nuxtApp._middleware.global])
+        type MiddlewareDef = string | RouteGuard
+        const middlewareEntries = new Set<MiddlewareDef>(orderMiddlewares([...globalMiddleware, ...nuxtApp._middleware.global]))
         for (const component of to.matched) {
           const componentMiddleware = component.meta.middleware as MiddlewareDef | MiddlewareDef[]
           if (!componentMiddleware) { continue }

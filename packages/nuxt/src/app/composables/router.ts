@@ -8,6 +8,7 @@ import type { PageMeta } from '../../pages/runtime/composables'
 
 import { useNuxtApp, useRuntimeConfig } from '../nuxt'
 import { PageRouteSymbol } from '../components/injections'
+import type { RouteGuard } from '../plugins/router'
 import type { NuxtError } from './error'
 import { createError, showError } from './error'
 
@@ -44,6 +45,8 @@ export const onBeforeRouteUpdate = (guard: NavigationGuard) => {
 
 export interface RouteMiddleware {
   (to: RouteLocationNormalized, from: RouteLocationNormalized): ReturnType<NavigationGuard>
+  enforce?: 'pre' | 'post' | 'default'
+  order?: number
 }
 
 /** @since 3.0.0 */
@@ -54,6 +57,7 @@ export function defineNuxtRouteMiddleware (middleware: RouteMiddleware) {
 
 export interface AddRouteMiddlewareOptions {
   global?: boolean
+  order?: 'pre' | 'post'
 }
 
 interface AddRouteMiddleware {
@@ -61,15 +65,44 @@ interface AddRouteMiddleware {
   (middleware: RouteMiddleware): void
 }
 
+const internalOrderMap = {
+  // -10: pre <-- pre mapped to this
+  'pre': -10,
+  // 0: default <-- default mapped to this
+  'default': 0,
+  // +10: post <-- post mapped to this
+  'post': 10,
+}
+
+export const orderMap: Record<NonNullable<RouteGuard['enforce']>, number> = {
+  pre: internalOrderMap.pre,
+  default: internalOrderMap.default,
+  post: internalOrderMap.post,
+}
+
+export function orderMiddlewares (middlewares: RouteGuard[] | Set<RouteGuard>) {
+  const _middlewares = [...middlewares]
+
+  for (const middleware of _middlewares) {
+    middleware.order ||= orderMap[middleware.enforce || 'default'] || orderMap.default
+    delete middleware.enforce
+  }
+
+  return _middlewares.sort((a, b) => (a.order ?? orderMap.default) - (b.order ?? orderMap.default))
+}
+
 /** @since 3.0.0 */
 export const addRouteMiddleware: AddRouteMiddleware = (name: string | RouteMiddleware, middleware?: RouteMiddleware, options: AddRouteMiddlewareOptions = {}) => {
   const nuxtApp = useNuxtApp()
-  const global = options.global || typeof name !== 'string'
+  const global = options.global || options.order || typeof name !== 'string'
   const mw = typeof name !== 'string' ? name : middleware
   if (!mw) {
     console.warn('[nuxt] No route middleware passed to `addRouteMiddleware`.', name)
     return
   }
+
+  mw.enforce = options.order
+
   if (global) {
     nuxtApp._middleware.global.push(mw)
   } else {
